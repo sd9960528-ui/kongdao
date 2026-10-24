@@ -105,23 +105,6 @@ function fmt(t) {
   return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
 }
 
-// 飛機在時間 t 的位置；還沒起飛或已經降落就回傳 null
-function planePosition(f, t) {
-  if (f.remark && f.remark.includes('取消')) return null;
-  const p = (t - f.dep) / f.dur;          // 0 = 剛起飛，1 = 剛降落
-  if (p < 0 || p > 1) return null;
-  const a = AIRPORTS[f.from], b = AIRPORTS[f.to];
-  return [a.lng + (b.lng - a.lng) * p, a.lat + (b.lat - a.lat) * p];
-}
-
-// 機頭方向（0 度 = 正北，順時針）
-function bearing(f) {
-  const a = AIRPORTS[f.from], b = AIRPORTS[f.to];
-  const dx = (b.lng - a.lng) * Math.cos(a.lat * Math.PI / 180);
-  const dy = b.lat - a.lat;
-  return Math.atan2(dx, dy) * 180 / Math.PI;
-}
-
 // 用 canvas 畫一架機頭朝上的小飛機，當作地圖圖示
 function makePlaneIcon(color) {
   const size = 48, c = document.createElement('canvas');
@@ -147,6 +130,8 @@ function startPlanes() {
     id: 'planes', type: 'symbol', source: 'planes',
     layout: {
       'icon-image': ['concat', 'plane-', ['get', 'airline']],
+      'icon-size': ['case', ['get', 'selected'], 1.5, 1],        // 選中的放大 1.5 倍
+      'symbol-sort-key': ['case', ['get', 'selected'], 1, 0],     // 選中的畫在最上面
       'icon-rotate': ['get', 'bearing'],
       'icon-rotation-alignment': 'map',
       'icon-allow-overlap': true,
@@ -283,36 +268,6 @@ map.on('load', () => {
   });
 });
 
-// 新版 tick：多了「跟隨」和「每秒更新面板」
-function tick() {
-  const t = simMinutes();
-  const features = [];
-  let selectedPos = null;
-
-  for (const f of FLIGHTS) {
-    const pos = planePosition(f, t);
-    if (!pos) continue;
-    if (f.id === selectedId) selectedPos = pos;
-    features.push({
-      type: 'Feature',
-      properties: { id: f.id, no: f.no, airline: f.airline, bearing: bearing(f) },
-      geometry: { type: 'Point', coordinates: pos }
-    });
-  }
-  map.getSource('planes').setData({ type: 'FeatureCollection', features });
-
-  if (following && selectedPos) map.setCenter(selectedPos);
-
-    document.getElementById('clock').textContent = `${fmt(t)}　空中 ${features.length} 架　${dataSource}`;
-
-  // 面板不用每一格都重畫，一秒一次就夠
-  if (Date.now() - lastPanelUpdate > 1000) {
-    lastPanelUpdate = Date.now();
-    updateInfo(t);
-    renderBoard(t);
-  }
-  requestAnimationFrame(tick);
-}
 // ================= 第 6 步：接上真實航班 =================
 
 const API_URL = 'https://kongdao-api.sd9960528.workers.dev';
@@ -387,3 +342,131 @@ async function loadRealFlights() {
 
 loadRealFlights();
 setInterval(loadRealFlights, 5 * 60 * 1000);   // 每 5 分鐘更新一次
+// ================= 第 9 步：弧線航線、加減速、飛行軌跡 =================
+
+const K = Math.cos(24 * Math.PI / 180);   // 在台灣的緯度，一度經度比一度緯度短
+const ARC = 0.08;                          // 弧線彎曲的程度
+const FC = features => ({ type: 'FeatureCollection', features });
+
+// 從機場 from 飛到 to，進度 u（0～1）時的位置。用「二次貝茲曲線」畫出弧線
+function curvePoint(from, to, u) {
+  const a = AIRPORTS[from], b = AIRPORTS[to];
+  const ax = a.lng * K, ay = a.lat, bx = b.lng * K, by = b.lat;
+  // 控制點：兩個機場的中點，往「前進方向的右邊」推一點
+  const cx = (ax + bx) / 2 + (by - ay) * ARC;
+  const cy = (ay + by) / 2 - (bx - ax) * ARC;
+  const v = 1 - u;
+  const x = v * v * ax + 2 * v * u * cx + u * u * bx;
+  const y = v * v * ay + 2 * v * u * cy + u * u * by;
+  return [x / K, y];
+}
+
+// 時間進度 p → 距離進度：起降時慢、巡航時快
+function ease(p) {
+  const s = 0.5 - 0.5 * Math.cos(Math.PI * p);
+  return 0.35 * s + 0.65 * p;
+}
+
+function progressOf(f, t) {
+  return Math.min(1, Math.max(0, (t - f.dep) / f.dur));
+}
+
+// 新版：飛機位置沿著弧線走
+function planePosition(f, t) {
+  if (f.remark && f.remark.includes('取消')) return null;
+  const p = (t - f.dep) / f.dur;
+  if (p < 0 || p > 1) return null;
+  return curvePoint(f.from, f.to, ease(p));
+}
+
+// 新版：機頭方向 = 弧線在這一點的切線方向
+function bearing(f, t) {
+  const u = ease(progressOf(f, t));
+  const a = curvePoint(f.from, f.to, Math.max(0, u - 0.01));
+  const b = curvePoint(f.from, f.to, Math.min(1, u + 0.01));
+  return Math.atan2((b[0] - a[0]) * K, b[1] - a[1]) * 180 / Math.PI;
+}
+
+// 把弧線的一段切成很多小點，變成可以畫的線
+function curveLine(from, to, u0, u1) {
+  const pts = [];
+  for (let i = 0; i <= 40; i++) pts.push(curvePoint(from, to, u0 + (u1 - u0) * i / 40));
+  return pts;
+}
+const lineFeature = (coords, part) => ({
+  type: 'Feature', properties: { part }, geometry: { type: 'LineString', coordinates: coords }
+});
+
+// 每條航線畫去程、回程兩條弧線
+function curvedRoutes() {
+  const features = [];
+  for (const code of Object.keys(AIRPORTS)) {
+    if (code === 'KNH') continue;
+    features.push(lineFeature(curveLine('KNH', code, 0, 1), 'route'));
+    features.push(lineFeature(curveLine(code, 'KNH', 0, 1), 'route'));
+  }
+  return FC(features);
+}
+
+// 選中飛機的軌跡：飛過的（done）和還沒飛的（todo）
+function trailData(t) {
+  if (selectedId === null) return FC([]);
+  const f = FLIGHTS[selectedId];
+  if (f.remark && f.remark.includes('取消')) return FC([]);
+  const u = ease(progressOf(f, t));
+  return FC([
+    lineFeature(curveLine(f.from, f.to, 0, u), 'done'),
+    lineFeature(curveLine(f.from, f.to, u, 1), 'todo')
+  ]);
+}
+
+map.on('load', () => {
+  // 把第 3 步的直線航線換成弧線
+  map.getSource('routes').setData(curvedRoutes());
+
+  // 軌跡圖層，放在飛機圖層的下面（第二個參數 'planes' 的意思）
+  map.addSource('trail', { type: 'geojson', data: FC([]) });
+  map.addLayer({
+    id: 'trail-done', type: 'line', source: 'trail',
+    filter: ['==', ['get', 'part'], 'done'],
+    paint: { 'line-color': '#a8236f', 'line-width': 3 }
+  }, 'planes');
+  map.addLayer({
+    id: 'trail-todo', type: 'line', source: 'trail',
+    filter: ['==', ['get', 'part'], 'todo'],
+    paint: { 'line-color': '#a8236f', 'line-width': 2, 'line-dasharray': [1, 1.5], 'line-opacity': 0.7 }
+  }, 'planes');
+});
+
+// 新版 tick：多了 selected 標記和軌跡
+function tick() {
+  const t = simMinutes();
+  const features = [];
+  let selectedPos = null;
+
+  for (const f of FLIGHTS) {
+    const pos = planePosition(f, t);
+    if (!pos) continue;
+    const isSel = f.id === selectedId;
+    if (isSel) selectedPos = pos;
+    features.push({
+      type: 'Feature',
+      properties: { id: f.id, no: f.no, airline: f.airline, bearing: bearing(f, t), selected: isSel },
+      geometry: { type: 'Point', coordinates: pos }
+    });
+  }
+  map.getSource('planes').setData(FC(features));
+  const trail = map.getSource('trail');
+  if (trail) trail.setData(trailData(t));
+
+  if (following && selectedPos) map.setCenter(selectedPos);
+
+  document.getElementById('clock').textContent = `${fmt(t)}　空中 ${features.length} 架　${dataSource}`;
+
+  if (Date.now() - lastPanelUpdate > 1000) {
+    lastPanelUpdate = Date.now();
+    updateInfo(t);
+    renderBoard(t);
+  }
+  requestAnimationFrame(tick);
+}
