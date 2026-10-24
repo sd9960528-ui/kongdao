@@ -528,7 +528,7 @@ function setTheme(dark) {
       return { ...next, sources, layers: [...next.layers, ...mine] };
     }
   });
-  map.once('style.load', applyMapColors);
+  map.once('idle', applyMapColors);
 }
 
 // 換底圖後飛機圖示會不見，地圖找不到圖示時，就依主題重畫一個
