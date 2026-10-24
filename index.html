@@ -2,8 +2,14 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>空島</title>
+  <meta name="theme-color" content="#101c23">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="空島">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
   <style>
         /* 顏色都寫成變數，切換主題時只要換變數 */
@@ -42,9 +48,28 @@
     .row.past { opacity: .45; }
     .old { display: block; font-size: 11px; color: var(--muted); text-decoration: line-through; }
     .status { font-size: 12px; padding: 1px 8px; border: 1px solid; border-radius: 10px; }
+    #handle { display: none; }
+
+    /* 手機版 */
     @media (max-width: 700px) {
+      html, body { overflow: hidden; overscroll-behavior: none; }
       #app { flex-direction: column; }
-      #panel { width: auto; height: 45%; border-left: 0; border-top: 1px solid var(--line); }
+      #panel {
+        width: auto; height: 42%;
+        border-left: 0; border-top: 1px solid var(--line);
+        padding-bottom: env(safe-area-inset-bottom);   /* 避開 iPhone 底部的橫條 */
+        transition: height .25s;
+      }
+      #panel.collapsed { height: 140px; }               /* 收起時只露出一小段 */
+      #handle { display: flex; justify-content: center; padding: 8px 0 4px; cursor: pointer; }
+      #handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--line); }
+      #info { min-height: 0; padding: 8px 14px; }
+      #clock {
+        top: calc(8px + env(safe-area-inset-top)); left: 8px;   /* 避開瀏海 */
+        font-size: 13px; padding: 4px 8px; max-width: calc(100vw - 32px);
+      }
+      #themeBtn { top: calc(48px + env(safe-area-inset-top)); left: 8px; }
+      .row { padding: 11px 12px; }                      /* 每一列高一點，手指比較好點 */
     }
     }
   </style>
@@ -53,6 +78,7 @@
   <div id="app">
     <div id="map"></div>
     <aside id="panel">
+      <div id="handle"><span></span></div>
       <div id="info"></div>
       <div class="tabs">
         <button id="tabDep" class="on">出發</button>

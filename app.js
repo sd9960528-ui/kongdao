@@ -571,3 +571,18 @@ function ensureGlowLayers() {
 
 // 一打開就把光暈圖層準備好，並依目前主題上色
 map.on('load', () => applyMapColors());
+// ================= 第 11 步：手機版 =================
+
+const panel = document.getElementById('panel');
+const isPhone = () => window.matchMedia('(max-width: 700px)').matches;
+
+// 點把手：收起或展開面板
+document.getElementById('handle').onclick = () => panel.classList.toggle('collapsed');
+
+// 面板高度動畫結束後，地圖重新量一次尺寸，才不會留白或被切掉
+panel.addEventListener('transitionend', () => map.resize());
+
+// 手機上點了飛機，如果面板是收起的，自動展開讓你看到資訊
+map.on('click', 'planes', () => {
+  if (isPhone()) panel.classList.remove('collapsed');
+});
