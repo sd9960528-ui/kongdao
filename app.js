@@ -173,11 +173,15 @@ function flightStatus(f, t) {
   return ['準時', 'var(--text)'];
 }
 
-function selectFlight(id) {
+function selectFlight(id, fromBoard) {
   selectedId = id;
-  following = true;
   updateInfo(simMinutes());
   renderBoard(simMinutes());
+  // 從看板點的，地圖移過去一次，之後就不再跟著動
+  if (fromBoard) {
+    const pos = planePosition(FLIGHTS[id], simMinutes());
+    if (pos) map.easeTo({ center: pos, duration: 800 });
+  }
 }
 
 // 上方資訊卡
@@ -198,12 +202,8 @@ function updateInfo(t) {
     <div style="height:6px;background:var(--line);border-radius:3px">
       <div style="width:${p * 100}%;height:100%;background:var(--accent);border-radius:3px"></div>
     </div>
-    <div style="margin-top:8px;color:${color}">${st}${p > 0 && p < 1 ? `，還有 ${left} 分鐘抵達` : ''}</div>
-    <button id="followBtn">${following ? '停止跟隨' : '跟隨這架'}</button>`;
-  document.getElementById('followBtn').onclick = () => {
-    following = !following;
-    updateInfo(simMinutes());
-  };
+    <div style="margin-top:8px;color:${color}">${st}${p > 0 && p < 1 ? `，還有 ${left} 分鐘抵達` : ''}</div>`;
+    
 }
 
 // 下方看板
@@ -249,7 +249,7 @@ function renderBoard(t) {
 // 點看板的某一列 → 選那班飛機
 document.getElementById('board').addEventListener('click', e => {
   const row = e.target.closest('.row');
-  if (row) selectFlight(Number(row.dataset.id));
+  if (row) selectFlight(Number(row.dataset.id), true);
 });
 
 // 切換出發／抵達
@@ -268,10 +268,6 @@ map.on('load', () => {
   map.on('click', 'planes', e => selectFlight(e.features[0].properties.id));
   map.on('mouseenter', 'planes', () => map.getCanvas().style.cursor = 'pointer');
   map.on('mouseleave', 'planes', () => map.getCanvas().style.cursor = '');
-  map.on('dragstart', () => {
-    following = false;
-    updateInfo(simMinutes());
-  });
 });
 
 // ================= 第 6 步：接上真實航班 =================
@@ -467,8 +463,6 @@ function tick() {
   map.getSource('planes').setData(FC(features));
   const trail = map.getSource('trail');
   if (trail) trail.setData(trailData(t));
-
-  if (following && selectedPos) map.setCenter(selectedPos);
 
   document.getElementById('clock').textContent = `${fmt(t)}　空中 ${features.length} 架　${dataSource}`;
   document.getElementById('clock').classList.toggle('warn', loadError);
