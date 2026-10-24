@@ -20,7 +20,8 @@
     .tabs { display: flex; }
     .tabs button { flex: 1; padding: 10px; border: 0; border-bottom: 2px solid transparent; background: none; cursor: pointer; font-size: 15px; }
     .tabs button.on { border-color: #a8236f; font-weight: bold; }
-    #board { flex: 1; overflow-y: auto; }
+    #board { flex: 1; overflow-y: auto; position: relative; }
+    .old { display: block; font-size: 11px; color: #999; text-decoration: line-through; }
     .row { display: grid; grid-template-columns: 52px 76px 1fr auto; gap: 6px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
     .row:hover { background: #f3e4ee; }
     .row.past { opacity: .45; }

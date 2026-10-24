@@ -170,6 +170,7 @@ FLIGHTS.forEach((f, i) => f.id = i);   // 每班飛機一個編號，點擊時�
 let selectedId = null;    // 目前選中的航班
 let following = false;    // 地圖要不要跟著它
 let boardTab = 'dep';     // 看板顯示出發或抵達
+let scrollPending = true; // 下次畫看板時，要不要自動捲到現在時間
 let lastPanelUpdate = 0;
 
 const AIRLINE_NAME = { B7: '立榮航空', AE: '華信航空' };
@@ -177,11 +178,12 @@ const hhmm = t => fmt(t).slice(0, 5);   // "07:30:00" → "07:30"
 
 // 航班狀態：回傳 [文字, 顏色]
 function flightStatus(f, t) {
-  if (f.remark && f.remark.includes('取消')) return ['取消', '#c0392b'];
-  if (f.remark && f.remark.includes('延')) return [f.remark, '#b26b00'];
   const arr = f.dep + f.dur;
+  if (f.remark && f.remark.includes('取消')) return ['取消', '#c0392b'];
   if (t > arr) return f.from === 'KNH' ? ['已起飛', '#888888'] : ['已抵達', '#2c7a4b'];
   if (t >= f.dep) return ['飛行中', '#a8236f'];
+  if (f.delay >= 5) return [`延誤 ${f.delay} 分`, '#b26b00'];
+  if (f.remark && f.remark.includes('延')) return [f.remark, '#b26b00'];
   if (f.from === 'KNH' && t >= f.dep - 30) return ['登機中', '#b26b00'];
   return ['準時', '#555555'];
 }
@@ -221,22 +223,36 @@ function updateInfo(t) {
 
 // 下方看板
 function renderBoard(t) {
-  const timeOf = f => boardTab === 'dep' ? f.dep : f.dep + f.dur;
-  const list = FLIGHTS
-    .filter(f => boardTab === 'dep' ? f.from === 'KNH' : f.to === 'KNH')
-    .sort((a, b) => timeOf(a) - timeOf(b));
+  const board = document.getElementById('board');
+  const isDep = boardTab === 'dep';
+  const timeOf = f => isDep ? f.dep : f.dep + f.dur;   // 最新的時間（含延誤）
 
-  document.getElementById('board').innerHTML = list.map(f => {
-    const other = boardTab === 'dep' ? f.to : f.from;
+  const list = FLIGHTS
+    .filter(f => isDep ? f.from === 'KNH' : f.to === 'KNH')
+    .sort((a, b) => (a.sched ?? timeOf(a)) - (b.sched ?? timeOf(b)));   // 照表定時間排
+
+  board.innerHTML = list.map(f => {
+    const other = isDep ? f.to : f.from;
     const [st, color] = flightStatus(f, t);
-    const past = timeOf(f) < t - 15 && st !== '飛行中';
-    return `<div class="row ${past ? 'past' : ''}" data-id="${f.id}">
-      <span>${hhmm(timeOf(f))}</span>
+    const now = timeOf(f);
+    const sched = f.sched ?? now;
+    const changed = Math.abs(now - sched) >= 5 && st !== '取消';   // 時間改了 5 分鐘以上
+    const past = now < t - 15 && st !== '飛行中';
+    return `<div class="row ${past ? 'past' : ''}" data-id="${f.id}" data-time="${now}">
+      <span>${hhmm(now)}${changed ? `<small class="old">${hhmm(sched)}</small>` : ''}</span>
       <span>${f.no}</span>
       <span>${AIRPORTS[other].name}</span>
       <span class="status" style="color:${color}">${st}</span>
     </div>`;
   }).join('');
+
+  // 自動捲到「15 分鐘前」之後的第一班
+  if (scrollPending) {
+    const rows = [...board.querySelectorAll('.row')];
+    const target = rows.find(r => Number(r.dataset.time) >= t - 15);
+    board.scrollTop = target ? target.offsetTop : board.scrollHeight;
+    scrollPending = false;
+  }
 }
 
 // 點看板的某一列 → 選那班飛機
@@ -247,6 +263,7 @@ document.getElementById('board').addEventListener('click', e => {
 
 // 切換出發／抵達
 function setTab(tab) {
+  scrollPending = true;
   boardTab = tab;
   document.getElementById('tabDep').classList.toggle('on', tab === 'dep');
   document.getElementById('tabArr').classList.toggle('on', tab === 'arr');
@@ -319,28 +336,33 @@ async function loadRealFlights() {
     const knh = data[0];
     const list = [];
 
-    // 從金門出發：起飛時間用「實際 → 預計 → 表定」裡最新的那個
+    // 從金門出發
     for (const d of knh.FIDSDeparture || []) {
       const dur = ROUTE_MIN[d.ArrivalAirportID];
-      if (!dur || !AIRLINE_NAME[d.AirlineID]) continue;   // 不認得的航線或航空公司先跳過
+      if (!dur || !AIRLINE_NAME[d.AirlineID]) continue;
+      const sched = timeToMin(d.ScheduleDepartureTime);
+      const dep = timeToMin(d.ActualDepartureTime || d.EstimatedDepartureTime || d.ScheduleDepartureTime);
+      if (dep === null) continue;
       list.push({
         no: `${d.AirlineID} ${d.FlightNumber}`, airline: d.AirlineID,
         from: 'KNH', to: d.ArrivalAirportID,
-        dep: timeToMin(d.ActualDepartureTime || d.EstimatedDepartureTime || d.ScheduleDepartureTime),
-        dur, remark: d.DepartureRemark || ''
+        dep, dur, sched, delay: dep - sched,
+        remark: d.DepartureRemark || ''
       });
     }
 
-    // 飛往金門：只知道抵達時間，起飛時間 = 抵達 - 飛行時間
+    // 飛往金門
     for (const a of knh.FIDSArrival || []) {
       const dur = ROUTE_MIN[a.DepartureAirportID];
       if (!dur || !AIRLINE_NAME[a.AirlineID]) continue;
+      const sched = timeToMin(a.ScheduleArrivalTime);
       const arr = timeToMin(a.ActualArrivalTime || a.EstimatedArrivalTime || a.ScheduleArrivalTime);
       if (arr === null) continue;
       list.push({
         no: `${a.AirlineID} ${a.FlightNumber}`, airline: a.AirlineID,
         from: a.DepartureAirportID, to: 'KNH',
-        dep: arr - dur, dur, remark: a.ArrivalRemark || ''
+        dep: arr - dur, dur, sched, delay: arr - sched,
+        remark: a.ArrivalRemark || ''
       });
     }
 
@@ -349,11 +371,13 @@ async function loadRealFlights() {
     // 換掉舊資料，但記住正在看的是哪一班
     const prevNo = selectedId !== null ? FLIGHTS[selectedId].no : null;
     FLIGHTS.length = 0;
-    FLIGHTS.push(...list.filter(f => f.dep !== null));
+    FLIGHTS.push(...list);
     FLIGHTS.forEach((f, i) => f.id = i);
     const again = FLIGHTS.find(f => f.no === prevNo);
     selectedId = again ? again.id : null;
 
+    // 第一次拿到真實資料時，看板捲到現在時間；之後每 5 分鐘更新就不要亂跳
+    if (dataSource === '示意班表') scrollPending = true;
     dataSource = `TDX 即時（${hhmm(simMinutes())} 更新）`;
   } catch (err) {
     console.warn('拿不到即時資料，繼續用示意班表：', err);
