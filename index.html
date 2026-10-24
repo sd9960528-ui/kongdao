@@ -49,6 +49,8 @@
     .old { display: block; font-size: 11px; color: var(--muted); text-decoration: line-through; }
     .status { font-size: 12px; padding: 1px 8px; border: 1px solid; border-radius: 10px; }
     #handle { display: none; }
+    #credit { padding: 8px 14px; font-size: 11px; line-height: 1.6; color: var(--muted); border-top: 1px solid var(--line); }
+    #clock.warn { color: var(--red); }
 
     /* 手機版 */
     @media (max-width: 700px) {
@@ -85,6 +87,10 @@
         <button id="tabArr">抵達</button>
       </div>
       <div id="board"></div>
+      <div id="credit">
+        航班資料：交通部 TDX 運輸資料流通服務<br>
+        實際起降時間請以航空公司公告為準
+      </div>
     </aside>
   </div>
   <div id="clock">--:--</div>
