@@ -477,16 +477,21 @@ const DARK_STYLE  = 'https://tiles.openfreemap.org/styles/dark';
 
 // 換底圖時要保留的「我們自己的」資料和圖層
 const MY_SOURCES = ['airports', 'routes', 'trail', 'planes'];
-const MY_LAYERS  = ['routes', 'airports', 'airport-labels', 'trail-done', 'trail-todo', 'planes'];
+const MY_LAYERS  = ['routes-glow', 'routes', 'airports-glow', 'airports', 'airport-labels','trail-glow', 'trail-done', 'trail-todo', 'planes-glow', 'planes'];
 
 let isDark = false;
 
-// 依目前主題，幫我們自己的圖層上色
+// 依目前主題，幫我們自己的圖層上色；暗色時打開霓虹光暈
 function applyMapColors() {
+  ensureGlowLayers();
   const c = isDark
-    ? { accent: '#ff6bb5', text: '#e4ecee', halo: '#0b161d', fill: '#16232a' }
-    : { accent: '#a8236f', text: '#1c2a31', halo: '#ffffff', fill: '#ffffff' };
+    ? { accent: '#ff6bb5', text: '#e4ecee', halo: '#0b161d', fill: '#16232a', b7: '#4fd197', ae: '#7aa4ff' }
+    : { accent: '#a8236f', text: '#1c2a31', halo: '#ffffff', fill: '#ffffff', b7: '#1f8a5b', ae: '#2f5fb3' };
+  const glow = isDark ? 1 : 0;   // 亮色時光暈透明度變 0，等於關掉
+
+  // 原本的圖層
   map.setPaintProperty('routes', 'line-color', c.accent);
+  map.setPaintProperty('routes', 'line-dasharray', isDark ? [1, 0] : [2, 2]);   // 暗色用實線，像霓虹燈管
   map.setPaintProperty('airports', 'circle-color', c.fill);
   map.setPaintProperty('airports', 'circle-stroke-color', c.accent);
   map.setPaintProperty('trail-done', 'line-color', c.accent);
@@ -495,6 +500,16 @@ function applyMapColors() {
     map.setPaintProperty(id, 'text-color', c.text);
     map.setPaintProperty(id, 'text-halo-color', c.halo);
   }
+
+  // 光暈圖層
+  map.setPaintProperty('routes-glow', 'line-color', c.accent);
+  map.setPaintProperty('routes-glow', 'line-opacity', 0.35 * glow);
+  map.setPaintProperty('trail-glow', 'line-color', c.accent);
+  map.setPaintProperty('trail-glow', 'line-opacity', 0.6 * glow);
+  map.setPaintProperty('airports-glow', 'circle-color', c.accent);
+  map.setPaintProperty('airports-glow', 'circle-opacity', 0.5 * glow);
+  map.setPaintProperty('planes-glow', 'circle-color', ['match', ['get', 'airline'], 'B7', c.b7, c.ae]);
+  map.setPaintProperty('planes-glow', 'circle-opacity', 0.55 * glow);
 }
 
 function setTheme(dark) {
@@ -531,3 +546,28 @@ map.on('load', () => {
   const wantDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   if (wantDark) setTheme(true);
 });
+// ================= 第 10-4 步：霓虹光暈 =================
+
+// 光暈圖層：又粗又模糊的同色線或圓，墊在原本的圖層下面
+function ensureGlowLayers() {
+  const add = (layer, beforeId) => { if (!map.getLayer(layer.id)) map.addLayer(layer, beforeId); };
+
+  // 航線的光：比航線粗很多、很模糊
+  add({ id: 'routes-glow', type: 'line', source: 'routes',
+        paint: { 'line-width': 8, 'line-blur': 6, 'line-opacity': 0 } }, 'routes');
+
+  // 選中飛機飛過的軌跡，光更亮一點
+  add({ id: 'trail-glow', type: 'line', source: 'trail', filter: ['==', ['get', 'part'], 'done'],
+        paint: { 'line-width': 12, 'line-blur': 8, 'line-opacity': 0 } }, 'trail-done');
+
+  // 機場的光
+  add({ id: 'airports-glow', type: 'circle', source: 'airports',
+        paint: { 'circle-radius': 16, 'circle-blur': 1, 'circle-opacity': 0 } }, 'airports');
+
+  // 飛機的光：選中的那架光比較大
+  add({ id: 'planes-glow', type: 'circle', source: 'planes',
+        paint: { 'circle-radius': ['case', ['get', 'selected'], 24, 14], 'circle-blur': 1, 'circle-opacity': 0 } }, 'planes');
+}
+
+// 一打開就把光暈圖層準備好，並依目前主題上色
+map.on('load', () => applyMapColors());
