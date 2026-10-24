@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>空島</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <style>
+    html, body { margin: 0; height: 100%; font-family: "Microsoft JhengHei", sans-serif; }
+    #app { display: flex; height: 100%; }
+    #map { flex: 1; }
+    #clock {
+      position: absolute; top: 12px; left: 12px;
+      background: #fff; padding: 6px 12px; border-radius: 4px;
+      font: 600 16px monospace; box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    #panel { width: 320px; display: flex; flex-direction: column; border-left: 1px solid #ddd; background: #fafafa; }
+    #info { padding: 14px; border-bottom: 1px solid #ddd; min-height: 130px; }
+    #info button { margin-top: 10px; padding: 6px 14px; cursor: pointer; }
+    .tabs { display: flex; }
+    .tabs button { flex: 1; padding: 10px; border: 0; border-bottom: 2px solid transparent; background: none; cursor: pointer; font-size: 15px; }
+    .tabs button.on { border-color: #a8236f; font-weight: bold; }
+    #board { flex: 1; overflow-y: auto; }
+    .row { display: grid; grid-template-columns: 52px 76px 1fr auto; gap: 6px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
+    .row:hover { background: #f3e4ee; }
+    .row.past { opacity: .45; }
+    .status { font-size: 12px; padding: 1px 8px; border: 1px solid; border-radius: 10px; }
+    /* 手機：面板移到下方 */
+    @media (max-width: 700px) {
+      #app { flex-direction: column; }
+      #panel { width: auto; height: 45%; border-left: 0; border-top: 1px solid #ddd; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="map"></div>
+    <aside id="panel">
+      <div id="info"></div>
+      <div class="tabs">
+        <button id="tabDep" class="on">出發</button>
+        <button id="tabArr">抵達</button>
+      </div>
+      <div id="board"></div>
+    </aside>
+  </div>
+  <div id="clock">--:--</div>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="schedule.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
