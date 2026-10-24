@@ -161,16 +161,16 @@ let lastPanelUpdate = 0;
 const AIRLINE_NAME = { B7: '立榮航空', AE: '華信航空' };
 const hhmm = t => fmt(t).slice(0, 5);   // "07:30:00" → "07:30"
 
-// 航班狀態：回傳 [文字, 顏色]
+// 航班狀態：回傳 [文字, 顏色]。顏色用 CSS 變數，會跟著亮暗主題變
 function flightStatus(f, t) {
   const arr = f.dep + f.dur;
-  if (f.remark && f.remark.includes('取消')) return ['取消', '#c0392b'];
-  if (t > arr) return f.from === 'KNH' ? ['已起飛', '#888888'] : ['已抵達', '#2c7a4b'];
-  if (t >= f.dep) return ['飛行中', '#a8236f'];
-  if (f.delay >= 5) return [`延誤 ${f.delay} 分`, '#b26b00'];
-  if (f.remark && f.remark.includes('延')) return [f.remark, '#b26b00'];
-  if (f.from === 'KNH' && t >= f.dep - 30) return ['登機中', '#b26b00'];
-  return ['準時', '#555555'];
+  if (f.remark && f.remark.includes('取消')) return ['取消', 'var(--red)'];
+  if (t > arr) return f.from === 'KNH' ? ['已起飛', 'var(--muted)'] : ['已抵達', 'var(--green)'];
+  if (t >= f.dep) return ['飛行中', 'var(--accent)'];
+  if (f.delay >= 5) return [`延誤 ${f.delay} 分`, 'var(--orange)'];
+  if (f.remark && f.remark.includes('延')) return [f.remark, 'var(--orange)'];
+  if (f.from === 'KNH' && t >= f.dep - 30) return ['登機中', 'var(--orange)'];
+  return ['準時', 'var(--text)'];
 }
 
 function selectFlight(id) {
@@ -193,10 +193,10 @@ function updateInfo(t) {
   const left = Math.ceil(f.dep + f.dur - t);
   box.innerHTML = `
     <div style="font-size:20px;font-weight:bold">${f.no}</div>
-    <div style="color:#666">${AIRLINE_NAME[f.airline]}</div>
+    <div style="color:var(--muted)">${AIRLINE_NAME[f.airline]}</div>
     <div style="margin:10px 0">${AIRPORTS[f.from].name} ${hhmm(f.dep)} → ${AIRPORTS[f.to].name} ${hhmm(f.dep + f.dur)}</div>
-    <div style="height:6px;background:#ddd;border-radius:3px">
-      <div style="width:${p * 100}%;height:100%;background:#a8236f;border-radius:3px"></div>
+    <div style="height:6px;background:var(--line);border-radius:3px">
+      <div style="width:${p * 100}%;height:100%;background:var(--accent);border-radius:3px"></div>
     </div>
     <div style="margin-top:8px;color:${color}">${st}${p > 0 && p < 1 ? `，還有 ${left} 分鐘抵達` : ''}</div>
     <button id="followBtn">${following ? '停止跟隨' : '跟隨這架'}</button>`;
@@ -470,3 +470,64 @@ function tick() {
   }
   requestAnimationFrame(tick);
 }
+// ================= 第 10 步：暗色主題 =================
+
+const LIGHT_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const DARK_STYLE  = 'https://tiles.openfreemap.org/styles/dark';
+
+// 換底圖時要保留的「我們自己的」資料和圖層
+const MY_SOURCES = ['airports', 'routes', 'trail', 'planes'];
+const MY_LAYERS  = ['routes', 'airports', 'airport-labels', 'trail-done', 'trail-todo', 'planes'];
+
+let isDark = false;
+
+// 依目前主題，幫我們自己的圖層上色
+function applyMapColors() {
+  const c = isDark
+    ? { accent: '#ff6bb5', text: '#e4ecee', halo: '#0b161d', fill: '#16232a' }
+    : { accent: '#a8236f', text: '#1c2a31', halo: '#ffffff', fill: '#ffffff' };
+  map.setPaintProperty('routes', 'line-color', c.accent);
+  map.setPaintProperty('airports', 'circle-color', c.fill);
+  map.setPaintProperty('airports', 'circle-stroke-color', c.accent);
+  map.setPaintProperty('trail-done', 'line-color', c.accent);
+  map.setPaintProperty('trail-todo', 'line-color', c.accent);
+  for (const id of ['airport-labels', 'planes']) {
+    map.setPaintProperty(id, 'text-color', c.text);
+    map.setPaintProperty(id, 'text-halo-color', c.halo);
+  }
+}
+
+function setTheme(dark) {
+  isDark = dark;
+  document.body.classList.toggle('dark', dark);
+  document.getElementById('themeBtn').textContent = dark ? '亮色地圖' : '暗色地圖';
+  try { localStorage.setItem('kongdao-theme', dark ? 'dark' : 'light'); } catch (e) {}
+
+  // 換底圖：新底圖的圖層 + 我們原本的機場、航線、飛機
+  map.setStyle(dark ? DARK_STYLE : LIGHT_STYLE, {
+    transformStyle: (prev, next) => {
+      if (!prev) return next;
+      const sources = { ...next.sources };
+      for (const id of MY_SOURCES) if (prev.sources[id]) sources[id] = prev.sources[id];
+      const mine = prev.layers.filter(l => MY_LAYERS.includes(l.id));
+      return { ...next, sources, layers: [...next.layers, ...mine] };
+    }
+  });
+  map.once('style.load', applyMapColors);
+}
+
+// 換底圖後飛機圖示會不見，地圖找不到圖示時，就依主題重畫一個
+map.on('styleimagemissing', e => {
+  if (e.id === 'plane-B7') map.addImage('plane-B7', makePlaneIcon(isDark ? '#4fd197' : '#1f8a5b'), { pixelRatio: 2 });
+  if (e.id === 'plane-AE') map.addImage('plane-AE', makePlaneIcon(isDark ? '#7aa4ff' : '#2f5fb3'), { pixelRatio: 2 });
+});
+
+document.getElementById('themeBtn').onclick = () => setTheme(!isDark);
+
+// 第一次打開：上次選過就用上次的；沒選過就跟著電腦的亮暗設定
+map.on('load', () => {
+  let saved = null;
+  try { saved = localStorage.getItem('kongdao-theme'); } catch (e) {}
+  const wantDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (wantDark) setTheme(true);
+});

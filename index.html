@@ -6,30 +6,46 @@
   <title>空島</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
   <style>
-    html, body { margin: 0; height: 100%; font-family: "Microsoft JhengHei", sans-serif; }
+        /* 顏色都寫成變數，切換主題時只要換變數 */
+    :root {
+      --bg: #fafafa; --card: #ffffff; --text: #1c2a31; --muted: #666666;
+      --line: #dddddd; --accent: #a8236f; --hover: #f3e4ee;
+      --green: #2c7a4b; --orange: #b26b00; --red: #c0392b;
+    }
+    body.dark {
+      --bg: #101c23; --card: #16232a; --text: #e4ecee; --muted: #93a6ad;
+      --line: #2a3d47; --accent: #ff6bb5; --hover: #2a2232;
+      --green: #56d18a; --orange: #f0b04a; --red: #ff7a6b;
+    }
+    html, body { margin: 0; height: 100%; font-family: "Microsoft JhengHei", sans-serif; color: var(--text); background: var(--bg); }
     #app { display: flex; height: 100%; }
     #map { flex: 1; }
     #clock {
       position: absolute; top: 12px; left: 12px;
-      background: #fff; padding: 6px 12px; border-radius: 4px;
+      background: var(--card); color: var(--text); padding: 6px 12px; border-radius: 4px;
       font: 600 16px monospace; box-shadow: 0 1px 4px rgba(0,0,0,.2);
     }
-    #panel { width: 320px; display: flex; flex-direction: column; border-left: 1px solid #ddd; background: #fafafa; }
-    #info { padding: 14px; border-bottom: 1px solid #ddd; min-height: 130px; }
-    #info button { margin-top: 10px; padding: 6px 14px; cursor: pointer; }
+    #themeBtn {
+      position: absolute; top: 52px; left: 12px;
+      background: var(--card); color: var(--text); border: 1px solid var(--line);
+      padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;
+    }
+    #panel { width: 320px; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--bg); }
+    #info { padding: 14px; border-bottom: 1px solid var(--line); min-height: 130px; }
+    #info button { margin-top: 10px; padding: 6px 14px; cursor: pointer; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 4px; }
     .tabs { display: flex; }
-    .tabs button { flex: 1; padding: 10px; border: 0; border-bottom: 2px solid transparent; background: none; cursor: pointer; font-size: 15px; }
-    .tabs button.on { border-color: #a8236f; font-weight: bold; }
+    .tabs button { flex: 1; padding: 10px; border: 0; border-bottom: 2px solid transparent; background: none; cursor: pointer; font-size: 15px; color: var(--muted); }
+    .tabs button.on { border-color: var(--accent); color: var(--text); font-weight: bold; }
     #board { flex: 1; overflow-y: auto; position: relative; }
-    .old { display: block; font-size: 11px; color: #999; text-decoration: line-through; }
     .row { display: grid; grid-template-columns: 52px 76px 1fr auto; gap: 6px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
-    .row:hover { background: #f3e4ee; }
+    .row:hover { background: var(--hover); }
     .row.past { opacity: .45; }
+    .old { display: block; font-size: 11px; color: var(--muted); text-decoration: line-through; }
     .status { font-size: 12px; padding: 1px 8px; border: 1px solid; border-radius: 10px; }
-    /* 手機：面板移到下方 */
     @media (max-width: 700px) {
       #app { flex-direction: column; }
-      #panel { width: auto; height: 45%; border-left: 0; border-top: 1px solid #ddd; }
+      #panel { width: auto; height: 45%; border-left: 0; border-top: 1px solid var(--line); }
+    }
     }
   </style>
 </head>
@@ -46,6 +62,7 @@
     </aside>
   </div>
   <div id="clock">--:--</div>
+  <button id="themeBtn">暗色地圖</button>
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="schedule.js"></script>
   <script src="app.js"></script>
