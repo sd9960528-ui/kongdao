@@ -107,6 +107,7 @@ function fmt(t) {
 
 // 飛機在時間 t 的位置；還沒起飛或已經降落就回傳 null
 function planePosition(f, t) {
+  if (f.remark && f.remark.includes('取消')) return null;
   const p = (t - f.dep) / f.dur;          // 0 = 剛起飛，1 = 剛降落
   if (p < 0 || p > 1) return null;
   const a = AIRPORTS[f.from], b = AIRPORTS[f.to];
@@ -176,6 +177,8 @@ const hhmm = t => fmt(t).slice(0, 5);   // "07:30:00" → "07:30"
 
 // 航班狀態：回傳 [文字, 顏色]
 function flightStatus(f, t) {
+  if (f.remark && f.remark.includes('取消')) return ['取消', '#c0392b'];
+  if (f.remark && f.remark.includes('延')) return [f.remark, '#b26b00'];
   const arr = f.dep + f.dur;
   if (t > arr) return f.from === 'KNH' ? ['已起飛', '#888888'] : ['已抵達', '#2c7a4b'];
   if (t >= f.dep) return ['飛行中', '#a8236f'];
@@ -283,7 +286,7 @@ function tick() {
 
   if (following && selectedPos) map.setCenter(selectedPos);
 
-  document.getElementById('clock').textContent = `${fmt(t)}　空中 ${features.length} 架`;
+    document.getElementById('clock').textContent = `${fmt(t)}　空中 ${features.length} 架　${dataSource}`;
 
   // 面板不用每一格都重畫，一秒一次就夠
   if (Date.now() - lastPanelUpdate > 1000) {
@@ -293,3 +296,70 @@ function tick() {
   }
   requestAnimationFrame(tick);
 }
+// ================= 第 6 步：接上真實航班 =================
+
+const API_URL = 'https://kongdao-api.sd9960528.workers.dev';
+
+// 各航線的飛行時間（分鐘），用來推算另一端的時間
+const ROUTE_MIN = { TSA: 55, RMQ: 50, CYI: 45, TNN: 50, KHH: 55, MZG: 35 };
+
+let dataSource = '示意班表';
+
+// "2026-10-24T08:35" → 515（從午夜算起的分鐘數）
+function timeToMin(s) {
+  if (!s) return null;
+  return Number(s.slice(11, 13)) * 60 + Number(s.slice(14, 16));
+}
+
+async function loadRealFlights() {
+  try {
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data[0]) throw new Error('資料格式不對');
+    const knh = data[0];
+    const list = [];
+
+    // 從金門出發：起飛時間用「實際 → 預計 → 表定」裡最新的那個
+    for (const d of knh.FIDSDeparture || []) {
+      const dur = ROUTE_MIN[d.ArrivalAirportID];
+      if (!dur || !AIRLINE_NAME[d.AirlineID]) continue;   // 不認得的航線或航空公司先跳過
+      list.push({
+        no: `${d.AirlineID} ${d.FlightNumber}`, airline: d.AirlineID,
+        from: 'KNH', to: d.ArrivalAirportID,
+        dep: timeToMin(d.ActualDepartureTime || d.EstimatedDepartureTime || d.ScheduleDepartureTime),
+        dur, remark: d.DepartureRemark || ''
+      });
+    }
+
+    // 飛往金門：只知道抵達時間，起飛時間 = 抵達 - 飛行時間
+    for (const a of knh.FIDSArrival || []) {
+      const dur = ROUTE_MIN[a.DepartureAirportID];
+      if (!dur || !AIRLINE_NAME[a.AirlineID]) continue;
+      const arr = timeToMin(a.ActualArrivalTime || a.EstimatedArrivalTime || a.ScheduleArrivalTime);
+      if (arr === null) continue;
+      list.push({
+        no: `${a.AirlineID} ${a.FlightNumber}`, airline: a.AirlineID,
+        from: a.DepartureAirportID, to: 'KNH',
+        dep: arr - dur, dur, remark: a.ArrivalRemark || ''
+      });
+    }
+
+    if (list.length === 0) throw new Error('沒有可用的航班');
+
+    // 換掉舊資料，但記住正在看的是哪一班
+    const prevNo = selectedId !== null ? FLIGHTS[selectedId].no : null;
+    FLIGHTS.length = 0;
+    FLIGHTS.push(...list.filter(f => f.dep !== null));
+    FLIGHTS.forEach((f, i) => f.id = i);
+    const again = FLIGHTS.find(f => f.no === prevNo);
+    selectedId = again ? again.id : null;
+
+    dataSource = `TDX 即時（${hhmm(simMinutes())} 更新）`;
+  } catch (err) {
+    console.warn('拿不到即時資料，繼續用示意班表：', err);
+    dataSource = '示意班表';
+  }
+}
+
+loadRealFlights();
+setInterval(loadRealFlights, 5 * 60 * 1000);   // 每 5 分鐘更新一次
