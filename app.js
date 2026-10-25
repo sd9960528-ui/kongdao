@@ -13,9 +13,12 @@ const KNH = AIRPORTS.KNH;
 // ===== 2. 建立地圖 =====
 const map = new maplibregl.Map({
   container: 'map',
+  attributionControl: false,   // 先關掉預設的，下面自己加一個小的
   style: 'https://tiles.openfreemap.org/styles/liberty',
   center: [119.6, 23.9],
   zoom: 6.5
+  // 版權資訊：收成一個 ⓘ 小按鈕，放在右上角，不會被手機面板擋住
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
 });
 
 // 底圖載入完成後，才能加上自己的資料
@@ -576,21 +579,7 @@ function ensureGlowLayers() {
 
 // 一打開就把光暈圖層準備好，並依目前主題上色
 map.on('load', () => applyMapColors());
-// ================= 第 11 步：手機版 =================
 
-const panel = document.getElementById('panel');
-const isPhone = () => window.matchMedia('(max-width: 700px)').matches;
-
-// 點把手：收起或展開面板
-document.getElementById('handle').onclick = () => panel.classList.toggle('collapsed');
-
-// 面板高度動畫結束後，地圖重新量一次尺寸，才不會留白或被切掉
-panel.addEventListener('transitionend', () => map.resize());
-
-// 手機上點了飛機，如果面板是收起的，自動展開讓你看到資訊
-map.on('click', 'planes', () => {
-  if (isPhone()) panel.classList.remove('collapsed');
-});
 // ================= 第 12 步：誠實的資料狀態 =================
 
 // 一開始不顯示示意班表，等真實資料進來
@@ -731,3 +720,78 @@ async function loadWeather() {
 
 loadWeather();
 setInterval(loadWeather, 10 * 60 * 1000);   // 氣象站每小時更新，10 分鐘檢查一次就夠
+
+// ================= 第 11 步（新版）：手機底部抽屜 =================
+
+const panel = document.getElementById('panel');
+const isPhone = () => window.matchMedia('(max-width: 700px)').matches;
+
+// 三段高度（像素）
+function sheetHeights() {
+  const vh = window.innerHeight;
+  return {
+    peek: 150,                 // 收起：只露出把手和飛機資訊
+    half: Math.round(vh * 0.45),
+    full: Math.round(vh * 0.88) // 展開：幾乎蓋住整個地圖
+  };
+}
+
+let sheetState = 'half';
+function setSheet(state) {
+  sheetState = state;
+  panel.style.height = isPhone() ? sheetHeights()[state] + 'px' : '';
+}
+
+// 拖曳：把手和飛機資訊那一塊都可以拖
+let dragStartY = null, dragStartH = 0, dragMoved = 0;
+
+function onDragStart(e) {
+  if (!isPhone()) return;
+  dragStartY = e.clientY;
+  dragStartH = panel.getBoundingClientRect().height;
+  dragMoved = 0;
+  panel.classList.add('dragging');
+  e.currentTarget.setPointerCapture(e.pointerId);
+}
+
+function onDragMove(e) {
+  if (dragStartY === null) return;
+  const h = sheetHeights();
+  const dy = dragStartY - e.clientY;            // 往上拖是正的
+  dragMoved = Math.max(dragMoved, Math.abs(dy));
+  const newH = Math.min(h.full, Math.max(h.peek, dragStartH + dy));
+  panel.style.height = newH + 'px';
+}
+
+function onDragEnd(e) {
+  if (dragStartY === null) return;
+  panel.classList.remove('dragging');
+  const h = sheetHeights();
+
+  if (dragMoved < 6) {
+    // 幾乎沒動 = 點一下：收起 ↔ 一半
+    setSheet(sheetState === 'peek' ? 'half' : 'peek');
+  } else {
+    // 放開時停在最接近的那一段
+    const cur = panel.getBoundingClientRect().height;
+    const nearest = Object.keys(h).reduce((a, b) => Math.abs(h[b] - cur) < Math.abs(h[a] - cur) ? b : a);
+    setSheet(nearest);
+  }
+  dragStartY = null;
+}
+
+for (const el of [document.getElementById('handle'), document.getElementById('info')]) {
+  el.addEventListener('pointerdown', onDragStart);
+  el.addEventListener('pointermove', onDragMove);
+  el.addEventListener('pointerup', onDragEnd);
+  el.addEventListener('pointercancel', onDragEnd);
+}
+
+// 手機上點了飛機，如果抽屜是收起的，拉到一半讓你看到資訊
+map.on('click', 'planes', () => {
+  if (isPhone() && sheetState === 'peek') setSheet('half');
+});
+
+// 轉向或視窗大小改變時，重新套用目前這一段的高度
+window.addEventListener('resize', () => setSheet(sheetState));
+setSheet('half');

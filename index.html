@@ -49,7 +49,6 @@
     .row.past { opacity: .45; }
     .old { display: block; font-size: 11px; color: var(--muted); text-decoration: line-through; }
     .status { font-size: 12px; padding: 1px 8px; border: 1px solid; border-radius: 10px; }
-    #handle { display: none; }
     #credit { padding: 8px 14px; font-size: 11px; line-height: 1.6; color: var(--muted); border-top: 1px solid var(--line); }
     #clock.warn { color: var(--red); }
     #stats { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
@@ -64,28 +63,41 @@
       max-width: 70vw; text-align: center;
     }
     #fogAlert.severe { background: var(--red); }
+    #handle { display: none; }
 
-    /* 手機版 */
+    /* ===== 手機版：底部抽屜蓋在地圖上 ===== */
     @media (max-width: 700px) {
       html, body { overflow: hidden; overscroll-behavior: none; }
-      #app { flex-direction: column; }
+      #app { display: block; height: 100%; }
+      #map { position: absolute; inset: 0; }        /* 地圖永遠全螢幕 */
+
       #panel {
-        width: auto; height: 42%;
-        border-left: 0; border-top: 1px solid var(--line);
-        padding-bottom: env(safe-area-inset-bottom);   /* 避開 iPhone 底部的橫條 */
-        transition: height .25s;
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+        width: auto; height: 45vh;
+        border: 0; border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 16px rgba(0,0,0,.25);
+        padding-bottom: env(safe-area-inset-bottom);
+        transition: height .25s ease;
       }
-      #panel.collapsed { height: 140px; }               /* 收起時只露出一小段 */
-      #handle { display: flex; justify-content: center; padding: 8px 0 4px; cursor: pointer; }
-      #handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--line); }
-      #info { min-height: 0; padding: 8px 14px; }
+      #panel.dragging { transition: none; }          /* 拖曳時跟著手指，不要動畫 */
+      #panel > * { flex-shrink: 0; }                 /* 上面的區塊不准被壓扁 */
+      #panel #board { flex: 1 1 auto; min-height: 0; } /* 剩下的空間都給看板，可以捲動 */
+
+      #handle {
+        display: flex; justify-content: center; padding: 10px 0 6px;
+        cursor: grab; touch-action: none;            /* 讓手指拖曳不會捲動頁面 */
+      }
+      #handle span { width: 44px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .6; }
+      #info { min-height: 0; padding: 4px 16px 10px; touch-action: none; }
+
       #clock {
-        top: calc(8px + env(safe-area-inset-top)); left: 8px;   /* 避開瀏海 */
-        font-size: 13px; padding: 4px 8px; max-width: calc(100vw - 32px);
+        top: calc(8px + env(safe-area-inset-top)); left: 8px;
+        font-size: 12px; padding: 4px 8px;
+        max-width: calc(100vw - 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
-      #themeBtn { top: calc(48px + env(safe-area-inset-top)); left: 8px; }
-      .row { padding: 11px 12px; }                      /* 每一列高一點，手指比較好點 */
-      #fogAlert { top: calc(88px + env(safe-area-inset-top)); max-width: 90vw; font-size: 13px; }
+      #themeBtn { top: calc(44px + env(safe-area-inset-top)); left: 8px; }
+      #fogAlert { top: calc(84px + env(safe-area-inset-top)); max-width: 90vw; font-size: 13px; }
+      .row { padding: 11px 14px; }
     }
 
   </style>
