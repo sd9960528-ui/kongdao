@@ -182,8 +182,8 @@ function selectFlight(id, fromBoard) {
     const pos = planePosition(FLIGHTS[id], simMinutes());
     if (pos) map.easeTo({ center: pos, duration: 800 });
   }
+  renderStats(t);
 }
-renderStats(t);
 
 // 上方資訊卡
 function updateInfo(t) {
@@ -603,7 +603,6 @@ map.on('load', () => {
   map.setLayoutProperty('planes', 'text-optional', true);
   map.setLayoutProperty('planes', 'text-variable-anchor', ['top', 'bottom', 'right', 'left']);
   map.setLayoutProperty('planes', 'text-radial-offset', 1.3);
-  map.setLayoutProperty('planes', 'text-offset', null);   // 改用上面的自動位置
   // 機場名稱一定要顯示
   map.setLayoutProperty('airport-labels', 'text-allow-overlap', true);
 });
