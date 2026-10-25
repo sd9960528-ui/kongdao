@@ -167,7 +167,7 @@ function flightStatus(f, t) {
   if (f.remark && f.remark.includes('取消')) return ['取消', 'var(--red)'];
   if (t > arr) return f.from === 'KNH' ? ['已起飛', 'var(--muted)'] : ['已抵達', 'var(--green)'];
   if (t >= f.dep) return ['飛行中', 'var(--accent)'];
-  if (f.delay >= 5) return [`延誤 ${f.delay} 分`, 'var(--orange)'];
+  if (f.delay >= 15) return [`延誤 ${f.delay} 分`, 'var(--orange)'];
   if (f.remark && f.remark.includes('延')) return [f.remark, 'var(--orange)'];
   if (f.from === 'KNH' && t >= f.dep - 30) return ['登機中', 'var(--orange)'];
   return ['準時', 'var(--text)'];
