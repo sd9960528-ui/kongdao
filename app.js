@@ -627,3 +627,107 @@ function renderStats(t) {
     chip('延誤', late, 'var(--orange)') +
     chip('取消', cancel, 'var(--red)');
 }
+// ================= 第 14 步：機場天氣、起霧警示與通知 =================
+
+const WEATHER_URL = API_URL + '/weather';
+let fogLevel = 0;            // 0 正常、1 注意、2 嚴重
+let weatherLoaded = false;   // 第一次載入不發通知，避免一打開就跳
+
+// 氣象署的 -990、-99 代表沒有資料
+const val = v => (v === undefined || v === null || Number(v) <= -99) ? null : Number(v);
+
+// 能見度描述 → 公里。">30" 取 30；"1-2" 取下限 1；"<1" 當成 0.5
+function visibilityKm(desc) {
+  if (!desc) return null;
+  const s = String(desc).trim();
+  if (s.startsWith('<')) return parseFloat(s.slice(1)) / 2;
+  const n = parseFloat(s.replace('>', ''));
+  return isNaN(n) ? null : n;
+}
+
+// 判斷等級（大略的參考值，不是機場的官方起降標準）
+function fogLevelOf(km, weather) {
+  if (km === null) return weather && weather.includes('霧') ? 1 : 0;
+  if (km < 0.8) return 2;
+  if (km < 1.6 || (weather && weather.includes('霧'))) return 1;
+  return 0;
+}
+
+// 風向角度 → 八方位（風是「從哪裡吹來」）
+function windName(deg) {
+  const names = ['北', '東北', '東', '東南', '南', '西南', '西', '西北'];
+  return names[Math.round(deg / 45) % 8] + '風';
+}
+
+function notifyFog(level, visText) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    new Notification(level === 2 ? '空島：金門能見度很低' : '空島：金門起霧', {
+      body: `目前能見度約 ${visText}，航班可能延誤或取消，出發前請留意航空公司公告。`,
+      icon: 'icon-192.png'
+    });
+  } catch (e) { console.warn('無法顯示通知：', e); }
+}
+
+function renderWeather(w) {
+  const box = document.getElementById('weather');
+  const alert = document.getElementById('fogAlert');
+  const levelColor = ['var(--green)', 'var(--orange)', 'var(--red)'][w.level];
+  const wind = w.windSpeed === null ? '' : `${w.windDir === null ? '' : windName(w.windDir)} ${w.windSpeed} m/s`;
+  const canAsk = 'Notification' in window && Notification.permission === 'default';
+
+  box.innerHTML = `
+    <b>金門天氣</b>　<span style="color:var(--muted)">${w.time} 觀測</span><br>
+    ${w.weather ? w.weather + '　' : ''}能見度 <b style="color:${levelColor}">${w.visText}</b>
+    　${wind}　${w.temp === null ? '' : w.temp + '°C'}　${w.humidity === null ? '' : '濕度 ' + w.humidity + '%'}
+    ${canAsk ? '<button id="notifyBtn">開啟起霧通知</button>' : ''}`;
+  if (canAsk) {
+    document.getElementById('notifyBtn').onclick = async () => {
+      await Notification.requestPermission();
+      renderWeather(w);
+    };
+  }
+
+  alert.hidden = w.level === 0;
+  alert.classList.toggle('severe', w.level === 2);
+  alert.textContent = w.level === 2
+    ? `⚠ 金門能見度很低（${w.visText}），航班很可能延誤或取消`
+    : `⚠ 金門能見度不佳（${w.visText}），航班可能受影響`;
+}
+
+async function loadWeather() {
+  try {
+    const res = await fetch(WEATHER_URL);
+    const data = await res.json();
+    const st = data && data.records && data.records.Station && data.records.Station[0];
+    if (!st) throw new Error('沒有天氣資料');
+    const e = st.WeatherElement;
+
+    let visDesc = e.VisibilityDescription;
+    if (location.search.includes('fogtest')) visDesc = '<1';   // 測試用：網址加 ?fogtest
+
+    const km = visibilityKm(visDesc);
+    const visText = !visDesc ? '—' : `${visDesc.replace('>', '大於 ').replace('<', '小於 ')} 公里`;
+    const level = fogLevelOf(km, e.Weather);
+
+    if (weatherLoaded && level > fogLevel) notifyFog(level, visText);   // 變嚴重了才通知
+    fogLevel = level;
+    weatherLoaded = true;
+
+    renderWeather({
+      level, visText,
+      weather: e.Weather && e.Weather !== '-99' ? e.Weather : '',
+      windDir: val(e.WindDirection),
+      windSpeed: val(e.WindSpeed),
+      temp: val(e.AirTemperature),
+      humidity: val(e.RelativeHumidity),
+      time: st.ObsTime.DateTime.slice(11, 16)
+    });
+  } catch (err) {
+    console.warn('拿不到天氣資料：', err);
+    document.getElementById('weather').textContent = '金門天氣暫時無法取得';
+  }
+}
+
+loadWeather();
+setInterval(loadWeather, 10 * 60 * 1000);   // 氣象站每小時更新，10 分鐘檢查一次就夠

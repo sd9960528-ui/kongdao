@@ -55,6 +55,15 @@
     #stats { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
     .stat { font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); white-space: nowrap; }
     .stat b { font-size: 14px; margin-left: 2px; }
+    #weather { padding: 10px 14px; font-size: 13px; line-height: 1.7; border-bottom: 1px solid var(--line); }
+    #weather button { margin-left: 6px; font-size: 12px; padding: 2px 8px; cursor: pointer; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 4px; }
+    #fogAlert {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      background: var(--orange); color: var(--bg); padding: 8px 14px; border-radius: 6px;
+      font-size: 14px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      max-width: 70vw; text-align: center;
+    }
+    #fogAlert.severe { background: var(--red); }
 
     /* 手機版 */
     @media (max-width: 700px) {
@@ -76,6 +85,7 @@
       }
       #themeBtn { top: calc(48px + env(safe-area-inset-top)); left: 8px; }
       .row { padding: 11px 12px; }                      /* 每一列高一點，手指比較好點 */
+      #fogAlert { top: calc(88px + env(safe-area-inset-top)); max-width: 90vw; font-size: 13px; }
     }
 
   </style>
@@ -86,6 +96,7 @@
     <aside id="panel">
       <div id="handle"><span></span></div>
       <div id="info"></div>
+      <div id="weather">機場天氣載入中…</div>
       <div id="stats"></div>
       <div class="tabs">
         <button id="tabDep" class="on">出發</button>
@@ -94,11 +105,13 @@
       <div id="board"></div>
       <div id="credit">
         航班資料：交通部 TDX 運輸資料流通服務<br>
+        天氣資料：交通部中央氣象署（金門站）<br>
         實際起降時間請以航空公司公告為準
       </div>
     </aside>
   </div>
   <div id="clock">--:--</div>
+  <div id="fogAlert" hidden></div>
   <button id="themeBtn">暗色地圖</button>
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="schedule.js"></script>
