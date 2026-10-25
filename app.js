@@ -605,7 +605,7 @@ function renderStats(t) {
     if (st === '取消') cancel++;
     else if (st === '飛行中') air++;
     else if (st === '已起飛' || st === '已抵達') done++;
-    if (st !== '取消' && f.delay >= 5) late++;   // 已經飛走的延誤班次也算進去
+    if (st !== '取消' && f.delay >= 15) late++;   // 已經飛走的延誤班次也算進去
   }
   const chip = (label, n, color) =>
     `<span class="stat" style="color:${color};border-color:${color}">${label}<b>${n}</b></span>`;
