@@ -131,7 +131,7 @@ function startPlanes() {
     layout: {
       'icon-image': ['concat', 'plane-', ['get', 'airline']],
       'icon-size': ['case', ['get', 'selected'], 1.5, 1],        // 選中的放大 1.5 倍
-      'symbol-sort-key': ['case', ['get', 'selected'], 1, 0],     // 選中的畫在最上面
+      'symbol-sort-key': ['case', ['get', 'selected'], 0, 1],     // 選中的班號優先顯示
       'icon-rotate': ['get', 'bearing'],
       'icon-rotation-alignment': 'map',
       'icon-allow-overlap': true,
@@ -183,6 +183,7 @@ function selectFlight(id, fromBoard) {
     if (pos) map.easeTo({ center: pos, duration: 800 });
   }
 }
+renderStats(t);
 
 // 上方資訊卡
 function updateInfo(t) {
@@ -594,3 +595,36 @@ map.on('click', 'planes', () => {
 
 // 一開始不顯示示意班表，等真實資料進來
 FLIGHTS.length = 0;
+// ================= 第 13 步：班號不重疊、今日統計 =================
+
+map.on('load', () => {
+  // 班號：自己找空位，放不下就先藏起來（飛機圖示照樣顯示）
+  map.setLayoutProperty('planes', 'text-allow-overlap', false);
+  map.setLayoutProperty('planes', 'text-optional', true);
+  map.setLayoutProperty('planes', 'text-variable-anchor', ['top', 'bottom', 'right', 'left']);
+  map.setLayoutProperty('planes', 'text-radial-offset', 1.3);
+  map.setLayoutProperty('planes', 'text-offset', null);   // 改用上面的自動位置
+  // 機場名稱一定要顯示
+  map.setLayoutProperty('airport-labels', 'text-allow-overlap', true);
+});
+// 今日統計
+function renderStats(t) {
+  const box = document.getElementById('stats');
+  if (FLIGHTS.length === 0) { box.innerHTML = ''; return; }
+  let air = 0, done = 0, late = 0, cancel = 0;
+  for (const f of FLIGHTS) {
+    const [st] = flightStatus(f, t);
+    if (st === '取消') cancel++;
+    else if (st === '飛行中') air++;
+    else if (st === '已起飛' || st === '已抵達') done++;
+    if (st !== '取消' && f.delay >= 5) late++;   // 已經飛走的延誤班次也算進去
+  }
+  const chip = (label, n, color) =>
+    `<span class="stat" style="color:${color};border-color:${color}">${label}<b>${n}</b></span>`;
+  box.innerHTML =
+    chip('今日', FLIGHTS.length, 'var(--text)') +
+    chip('空中', air, 'var(--accent)') +
+    chip('已完成', done, 'var(--green)') +
+    chip('延誤', late, 'var(--orange)') +
+    chip('取消', cancel, 'var(--red)');
+}

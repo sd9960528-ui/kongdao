@@ -51,6 +51,9 @@
     #handle { display: none; }
     #credit { padding: 8px 14px; font-size: 11px; line-height: 1.6; color: var(--muted); border-top: 1px solid var(--line); }
     #clock.warn { color: var(--red); }
+    #stats { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    .stat { font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); white-space: nowrap; }
+    .stat b { font-size: 14px; margin-left: 2px; }
 
     /* 手機版 */
     @media (max-width: 700px) {
@@ -73,7 +76,7 @@
       #themeBtn { top: calc(48px + env(safe-area-inset-top)); left: 8px; }
       .row { padding: 11px 12px; }                      /* 每一列高一點，手指比較好點 */
     }
-    }
+
   </style>
 </head>
 <body>
@@ -82,6 +85,7 @@
     <aside id="panel">
       <div id="handle"><span></span></div>
       <div id="info"></div>
+      <div id="stats"></div>
       <div class="tabs">
         <button id="tabDep" class="on">出發</button>
         <button id="tabArr">抵達</button>
