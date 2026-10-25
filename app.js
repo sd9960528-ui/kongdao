@@ -17,9 +17,10 @@ const map = new maplibregl.Map({
   style: 'https://tiles.openfreemap.org/styles/liberty',
   center: [119.6, 23.9],
   zoom: 6.5
-  // 版權資訊：收成一個 ⓘ 小按鈕，放在右上角，不會被手機面板擋住
-  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
 });
+
+// 版權資訊：收成一個 ⓘ 小按鈕，放在右上角，不會被手機面板擋住
+map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
 
 // 底圖載入完成後，才能加上自己的資料
 map.on('load', () => {
