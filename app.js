@@ -182,7 +182,6 @@ function selectFlight(id, fromBoard) {
     const pos = planePosition(FLIGHTS[id], simMinutes());
     if (pos) map.easeTo({ center: pos, duration: 800 });
   }
-  renderStats(t);
 }
 
 // 上方資訊卡
@@ -245,6 +244,7 @@ function renderBoard(t) {
     board.scrollTop = target ? target.offsetTop : board.scrollHeight;
     scrollPending = false;
   }
+  renderStats(t);
 }
 
 // 點看板的某一列 → 選那班飛機
